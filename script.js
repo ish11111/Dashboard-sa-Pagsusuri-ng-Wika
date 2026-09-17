@@ -490,14 +490,30 @@ function renderMapSection() {
     { name: 'Metro Manila', lat: 14.5995, lon: 120.9842, lang: 'Tagalog' },
     { name: 'Batangas', lat: 13.9397, lon: 121.0572, lang: 'Tagalog' },
     { name: 'Laguna', lat: 14.1000, lon: 121.3790, lang: 'Tagalog' },
+    { name: 'Quezon', lat: 14.0298, lon: 121.5654, lang: 'Tagalog' },
+    { name: 'Bulacan', lat: 14.8000, lon: 120.8800, lang: 'Tagalog' },
     { name: 'Tacloban City', lat: 11.2434, lon: 125.0016, lang: 'Waray' },
-    { name: 'Catbalogan', lat: 12.0710, lon: 124.8817, lang: 'Waray' }
+    { name: 'Catbalogan', lat: 12.0710, lon: 124.8817, lang: 'Waray' },
+    { name: 'Borongan', lat: 11.7758, lon: 125.4353, lang: 'Waray' },
+    { name: 'Palo, Leyte', lat: 11.1561, lon: 125.0044, lang: 'Waray' }
   ];
 
   let filteredLocations = masterLocations.filter(loc => {
     if (state.mapLang === 'all') return true;
     return loc.lang === state.mapLang;
   });
+
+  let latRange, lonRange, centerCoord;
+  if (state.mapScope === 'luzon') {
+    centerCoord = { lat: 13.5, lon: 121.5 };
+    latRange = [9.5, 19.0];
+    lonRange = [117.5, 125.5];
+  } else {
+    // Zoomed out wide enough to capture the whole Philippines clearly
+    centerCoord = { lat: 12.0, lon: 122.0 };
+    latRange = [4.0, 22.0];
+    lonRange = [114.0, 130.0];
+  }
 
   const tagalogLocs = filteredLocations.filter(l => l.lang === 'Tagalog');
   const warayLocs = filteredLocations.filter(l => l.lang === 'Waray');
@@ -513,7 +529,7 @@ function renderMapSection() {
       lon: tagalogLocs.map(l => l.lon),
       text: tagalogLocs.map(l => l.name),
       textposition: 'top right',
-      marker: { size: 10, color: '#38bdf8' }
+      marker: { size: 12, color: '#38bdf8' }
     });
   }
 
@@ -526,27 +542,35 @@ function renderMapSection() {
       lon: warayLocs.map(l => l.lon),
       text: warayLocs.map(l => l.name),
       textposition: 'top right',
-      marker: { size: 10, color: '#f43f5e' }
+      marker: { size: 12, color: '#f43f5e' }
     });
   }
 
   const layout = {
     geo: {
-      projection: { type: 'mercator' },
-      center: { lat: 12.8, lon: 122.5 },
+      scope: 'asia',
+      resolution: 50,
+      projection: { type: 'mercator', scale: 1.4 }, // Zoomed out for full visibility
+      center: centerCoord,
       showland: true,
       landcolor: '#1e293b',
       subunitcolor: '#334155',
-      bgcolor: 'rgba(0,0,0,0)'
+      countrycolor: '#475569',
+      coastlinecolor: '#64748b',
+      bgcolor: 'rgba(0,0,0,0)',
+      lataxis: { range: latRange },
+      lonaxis: { range: lonRange }
     },
     paper_bgcolor: 'rgba(0,0,0,0)',
     plot_bgcolor: 'rgba(0,0,0,0)',
-    margin: { t: 10, r: 20, b: 10, l: 20 },
+    margin: { t: 10, r: 10, b: 10, l: 10 },
     showlegend: false
   };
 
+  const config = { responsive: true, displayModeBar: false };
+
   if (document.getElementById('plotly-map-container')) {
-    Plotly.react('plotly-map-container', traces, layout, { displayModeBar: false });
+    Plotly.react('plotly-map-container', traces, layout, config);
   }
 
   chipsContainer.innerHTML = filteredLocations.map(item => `
@@ -584,6 +608,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
       renderMetrics();
       renderActiveSection();
+    });
+  });
+
+  // Map Scope Buttons Click Handlers
+  const scopeBtns = document.querySelectorAll(".map-scope-btn");
+  scopeBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      scopeBtns.forEach(b => {
+        b.style.background = "transparent";
+        b.style.color = "var(--text-main)";
+        b.style.fontWeight = "400";
+      });
+      btn.style.background = "var(--accent)";
+      btn.style.color = "#fff";
+      btn.style.fontWeight = "600";
+      state.mapScope = btn.getAttribute("data-scope");
+      renderMapSection();
+    });
+  });
+
+  // Map Language Filter Buttons Click Handlers
+  const langBtns = document.querySelectorAll(".map-lang-btn");
+  langBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      langBtns.forEach(b => {
+        b.style.background = "transparent";
+        b.style.color = "var(--text-main)";
+        b.style.fontWeight = "400";
+      });
+      btn.style.background = "var(--accent)";
+      btn.style.color = "#fff";
+      btn.style.fontWeight = "600";
+      state.mapLang = btn.getAttribute("data-lang");
+      renderMapSection();
     });
   });
 
