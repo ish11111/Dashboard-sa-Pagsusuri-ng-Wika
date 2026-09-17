@@ -3,8 +3,8 @@ let corpusData = {
   Waray: []
 };
 
-// Separate dictionaries to avoid cross-contamination
-let dictionaryData = {}; // For Section 1 (cognates.json)
+// Separate dictionaries
+let dictionaryData = {}; 
 let statsData = {};
 
 let state = {
@@ -62,7 +62,7 @@ async function loadLocalCorpusData() {
   }
 }
 
-// Load dictionary directly using the full, rich fallback data set
+// 2. Load dictionary using the full rich dataset
 async function loadDictionary() {
   dictionaryData = {
     "usa": { tagalog: "hayop, gubat, usa, nakita, tumatakbo", waray: "ka, nga, mga, la, ini, adlaw" },
@@ -471,7 +471,6 @@ function renderMapSection() {
     latRange = [9.5, 19.0];
     lonRange = [117.5, 125.5];
   } else {
-    // Zoomed out wide enough to capture the whole Philippines clearly
     centerCoord = { lat: 12.0, lon: 122.0 };
     latRange = [4.0, 22.0];
     lonRange = [114.0, 130.0];
@@ -512,7 +511,7 @@ function renderMapSection() {
     geo: {
       scope: 'asia',
       resolution: 50,
-      projection: { type: 'mercator', scale: 1.4 }, // Zoomed out for full visibility
+      projection: { type: 'mercator', scale: 1.4 },
       center: centerCoord,
       showland: true,
       landcolor: '#1e293b',
@@ -606,6 +605,60 @@ document.addEventListener("DOMContentLoaded", () => {
       renderMapSection();
     });
   });
+
+  // --- SECTION 1 VIEW SWITCHING HANDLERS ---
+  const btnCollocWeb = document.getElementById("btn-colloc-web");
+  const btnCollocCirrus = document.getElementById("btn-colloc-cirrus");
+  const collocContainer = document.getElementById("colloc-network-container");
+
+  if (btnCollocWeb && btnCollocCirrus) {
+    btnCollocWeb.addEventListener("click", () => {
+      btnCollocWeb.style.background = "#fff";
+      btnCollocWeb.style.fontWeight = "600";
+      btnCollocCirrus.style.background = "transparent";
+      btnCollocCirrus.style.fontWeight = "400";
+      if (collocContainer) {
+        collocContainer.innerHTML = `<iframe style="width: 100%; max-width: 600px; height: 424px; border: none;" src="https://beta.voyant-tools.org/tool/Links/?query=nga&query=ng&query=sa&corpus=${VOYANT_CORPUS_ID}"></iframe>`;
+      }
+    });
+
+    btnCollocCirrus.addEventListener("click", () => {
+      btnCollocCirrus.style.background = "#fff";
+      btnCollocCirrus.style.fontWeight = "600";
+      btnCollocWeb.style.background = "transparent";
+      btnCollocWeb.style.fontWeight = "400";
+      if (collocContainer) {
+        collocContainer.innerHTML = `<iframe style="width: 100%; max-width: 600px; height: 424px; border: none;" src="https://beta.voyant-tools.org/tool/Cirrus/?corpus=${VOYANT_CORPUS_ID}"></iframe>`;
+      }
+    });
+  }
+
+  // --- SECTION 2 VIEW SWITCHING HANDLERS ---
+  const btnTrendStacked = document.getElementById("btn-trend-stacked");
+  const btnTrendBar = document.getElementById("btn-trend-bar");
+  const trendContainer = document.getElementById("relative-freq-container");
+
+  if (btnTrendStacked && btnTrendBar) {
+    btnTrendStacked.addEventListener("click", () => {
+      btnTrendStacked.style.background = "#fff";
+      btnTrendStacked.style.fontWeight = "600";
+      btnTrendBar.style.background = "transparent";
+      btnTrendBar.style.fontWeight = "400";
+      if (trendContainer) {
+        trendContainer.innerHTML = `<iframe style="width: 100%; max-width: 600px; height: 424px; border: none;" src="https://beta.voyant-tools.org/tool/Trends/?query=nga&query=ng&query=sa&query=han&query=mga&chartType=stacked&corpus=${VOYANT_CORPUS_ID}"></iframe>`;
+      }
+    });
+
+    btnTrendBar.addEventListener("click", () => {
+      btnTrendBar.style.background = "#fff";
+      btnTrendBar.style.fontWeight = "600";
+      btnTrendStacked.style.background = "transparent";
+      btnTrendStacked.style.fontWeight = "400";
+      if (trendContainer) {
+        trendContainer.innerHTML = `<iframe style="width: 100%; max-width: 600px; height: 424px; border: none;" src="https://beta.voyant-tools.org/tool/Trends/?query=nga&query=ng&query=sa&query=han&query=mga&chartType=line&corpus=${VOYANT_CORPUS_ID}"></iframe>`;
+      }
+    });
+  }
 
   if (cooccurenceSelectEl) {
     cooccurenceSelectEl.addEventListener("change", (e) => {
