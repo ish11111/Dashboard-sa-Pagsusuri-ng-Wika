@@ -117,7 +117,7 @@ async function loadDictionary() {
   };
 
   try {
-    const response = await fetch("./cognates.json");
+    const response = await fetch("Data/cognates.json");
     if (!response.ok) throw new Error("Network response was not ok");
     const cognatesJson = await response.json();
 
