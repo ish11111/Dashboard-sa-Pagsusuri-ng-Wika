@@ -62,9 +62,9 @@ async function loadLocalCorpusData() {
   }
 }
 
-// 2. Load ONLY cognates.json for Section 1's Interactive Co-occurrence Map with built-in fallback data
+// Load dictionary directly using the full, rich fallback data set
 async function loadDictionary() {
-  const fallbackCognates = {
+  dictionaryData = {
     "usa": { tagalog: "hayop, gubat, usa, nakita, tumatakbo", waray: "ka, nga, mga, la, ini, adlaw" },
     "wala": { tagalog: "tao, pera, hindi, mayroon, kahit, talagang", waray: "tuo, wala, dapit, kamot, bahin, ngadto" },
     "bukid": { tagalog: "sakahan, palayan, magsasaka, lupa, bundok, probinsya", waray: "dagko, taas, ngadto, kahoy, uma, bungtod" },
@@ -115,44 +115,6 @@ async function loadDictionary() {
     "saka": { tagalog: "pagkatapos, saka, bahay, bukid, magsasaka", waray: "ngan, liwat, ngadto, balay, bukid" },
     "hiya": { tagalog: "kahihiyan, nakakahiya, nahihiya, ikinahihiya, pagkapahiya, hiya", waray: "iya, niya, ira, nira, mga, nga, amo, ini" }
   };
-
-  try {
-    const response = await fetch("Data/cognates.json");
-    if (!response.ok) throw new Error("Network response was not ok");
-    const cognatesJson = await response.json();
-
-    dictionaryData = {};
-
-    // Map nodes
-    if (cognatesJson.nodes) {
-      cognatesJson.nodes.forEach(node => {
-        dictionaryData[node.id] = { tagalogArray: [], warayArray: [] };
-      });
-    }
-
-    // Map edges into respective language arrays
-    if (cognatesJson.edges) {
-      cognatesJson.edges.forEach(edge => {
-        if (dictionaryData[edge.source]) {
-          if (edge.type === "tagalog_collocate") {
-            dictionaryData[edge.source].tagalogArray.push(edge.target);
-          } else if (edge.type === "waray_collocate") {
-            dictionaryData[edge.source].warayArray.push(edge.target);
-          }
-        }
-      });
-    }
-
-    // Convert arrays into strings for renderColloc compatibility
-    Object.keys(dictionaryData).forEach(word => {
-      dictionaryData[word].tagalog = dictionaryData[word].tagalogArray.join(", ");
-      dictionaryData[word].waray = dictionaryData[word].warayArray.join(", ");
-    });
-
-  } catch (err) {
-    console.warn("Hindi ma-load ang cognates.json, ginagamit ang built-in fallback data.", err);
-    dictionaryData = fallbackCognates;
-  }
 
   const cooccurenceSelectEl = document.getElementById("cooccurence-word-select");
   const words = Object.keys(dictionaryData).sort();
