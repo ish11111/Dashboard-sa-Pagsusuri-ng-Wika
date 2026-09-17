@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="tl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard sa Pagsusuri ng Tagalog at Waray</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto+Slab:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Papa Parse CDN Library for reading CSV files -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <div class="header-title">Dashboard sa Pagsusuri ng Wika (Tagalog kumpara sa Waray)</div>
+      <div class="header-subtitle">Pagsusuri ng Corpus, Data Insights, Linguistic Anomalies, at NLP Preprocessing</div>
+    </header>
+
+    <main class="main-layout">
+      <!-- Left Panel: Sidebar Navigation -->
+      <section class="panel sidebar-panel">
+        <h3 class="panel-heading">Mga Kontrol</h3>
+
+        <div class="control-group">
+          <label for="corpus-select">Pumili ng Corpus</label>
+          <select id="corpus-select">
+            <option value="Tagalog">Tagalog (tgl_wikipedia_2021)</option>
+            <option value="Waray">Waray (war_wikipedia_2021)</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label>Nabigasyon</label>
+          <div class="tabs-group" id="nav-group">
+            <button class="tab-btn active" data-section="home">Home / Buod</button>
+            <button class="tab-btn" data-section="colloc">Seksyon 1: Kolokasyon</button>
+            <button class="tab-btn" data-section="freq">Seksyon 2: Dalas ng Salita</button>
+            <button class="tab-btn" data-section="nlp">Seksyon 3: NLP</button>
+            <button class="tab-btn" data-section="map">Seksyon 4: Mapa</button>
+          </div>
+        </div>
+
+        <!-- Ipinapakita lamang sa Seksyon 1 -->
+        <div class="control-group" id="search-container" style="display: none;">
+          <label for="target-word-select">Pumili ng Salita (Homograph)</label>
+          <select id="target-word-select"></select>
+        </div>
+
+        <div class="help-text" id="status-text">
+          Nilo-load ang mga CSV files mula sa Data folder...
+        </div>
+      </section>
+
+      <!-- Right Column -->
+      <div class="right-column">
+
+        <!-- Metric Cards Row -->
+        <section class="panel metric-panel">
+          <div class="metric-cards" id="metric-cards">
+            <div class="metric-card" data-metric="tokens">
+              <div class="metric-label">Kabuuang Token</div>
+              <div class="metric-value" id="metric-tokens">–</div>
+            </div>
+            <div class="metric-card" data-metric="types">
+              <div class="metric-label">Natatanging Salita (Types)</div>
+              <div class="metric-value" id="metric-types">–</div>
+            </div>
+            <div class="metric-card" data-metric="ttr">
+              <div class="metric-label">Type-Token Ratio</div>
+              <div class="metric-value" id="metric-ttr">–</div>
+            </div>
+            <div class="metric-card" data-metric="sentences">
+              <div class="metric-label">Pangungusap</div>
+              <div class="metric-value" id="metric-sentences">N/A</div>
+            </div>
+          </div>
+          <div class="metric-detail" id="metric-detail" style="display:none;"></div>
+        </section>
+
+        <!-- Seksyon: Home -->
+        <div class="content-section active" id="section-home">
+          <section class="panel top-panel">
+            <div class="panel-heading">Dalas ng Salita (Word Frequency & Data Insight)</div>
+            <div class="subtext">Pagsusuri sa estruktura at dalas ng mga marker.</div>
+            <div class="word-cloud-container" id="home-word-cloud"></div>
+          </section>
+          <section class="panel bottom-panel">
+            <div class="panel-heading">Pagsusuri ng mga Pangunahing Marker</div>
+            <div class="subtext">Pagkumpara sa estruktura ng Tagalog at Waray</div>
+            <div id="home-colloc-list"></div>
+          </section>
+        </div>
+
+        <!-- Seksyon 1: Kolokasyon (Matched to Reference Layout) -->
+        <div class="content-section" id="section-colloc">
+          <section class="panel" style="padding: 18px 24px;">
+            <div class="panel-heading">Seksyon 1: Anomaliyang Lingguwistiko at Network Graph ng Kolokasyon</div>
+            <div class="subtext">Interaktibong Voyant Tools Links para sa pagsusuri ng kontekstwal na ugnayan sa pagitan ng mga salita sa korpus.</div>
+
+            <div class="freq-view-controls" style="margin-bottom: 16px;">
+              <div style="font-size: 11px; color: var(--text-muted);"><strong>Daloy ng Pagsusuri sa Kolokasyon:</strong> 1. Seed Lexicon → 2. Context Window (±1-5) → 3. Radial Hubs / Cirrus → 4. Collocation Web</div>
+              <div class="chart-type-toggle">
+                <button class="toggle-btn active" id="btn-colloc-web">🔗 Links (Collocation Web)</button>
+                <button class="toggle-btn" id="btn-colloc-cirrus">☁️ Cirrus (Word Cloud)</button>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 12px; color: var(--text-muted);">
+              <div>Target: <strong id="colloc-target-display" style="color: var(--primary);">basa</strong> | Window: <strong>±1</strong></div>
+              <div>Korpus: <span id="colloc-meta-info">Tagalog • 19 Salita / 21 Ugnayan</span></div>
+            </div>
+
+            <!-- Network Graph Visual Container -->
+            <div id="colloc-network-container" class="network-graph-box">
+              <!-- Dynamically injected network nodes representing collocated words -->
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">Linguistic Contrast &amp; Matching</div>
+            <div class="subtext">Paghahambing ng paggamit sa dalawang wika</div>
+            <div id="colloc-detail-list"></div>
+          </section>
+        </div>
+
+        <!-- Seksyon 2: Dalas ng Salita -->
+        <div class="content-section" id="section-freq">
+          <section class="panel">
+            <div class="panel-heading">Seksyon 2: Talaan ng Relatibong Dalas</div>
+            <div class="subtext">Ikumpara ang dalas ng hanggang 10 salita nang sabay-sabay mula sa aktwal na datasets.</div>
+
+            <div class="freq-controls">
+              <input type="text" id="freq-search-input" list="vocab-datalist" placeholder="Maghanap ng salita (hal. bahay, tubig, ako)...">
+              <datalist id="vocab-datalist"></datalist>
+              <button id="freq-add-btn" type="button">+ Idagdag</button>
+            </div>
+            <div class="help-text" id="freq-message" style="display:none;"></div>
+
+            <div class="freq-chips" id="freq-chips"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">Paghahambing ng Dalas</div>
+            <div class="subtext">Asul = Tagalog, Ginto = Waray.</div>
+            <div id="freq-chart" class="freq-chart"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">Talaan ng Relatibong Dalas</div>
+            <div class="subtext">Eksaktong proporsyon at dominanteng korpus sa bawat salita batay sa aktwal na datos.</div>
+            <div id="freq-table"></div>
+          </section>
+        </div>
+
+        <!-- Seksyon 3: NLP -->
+        <div class="content-section" id="section-nlp">
+          <section class="panel">
+            <div class="panel-heading">NLP Preprocessing &amp; Noise Reduction Pipeline</div>
+            <div class="subtext">Paghahanda ng corpus bago isalang sa AI Translation model.</div>
+            <div id="nlp-pipeline"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-heading">Paghahanda para sa Pagsasalin</div>
+            <div class="subtext">Subukan ang interactive text cleaner sa ibaba</div>
+            <div id="nlp-tool"></div>
+          </section>
+        </div>
+
+        <!-- Seksyon 4: Mapa -->
+        <div class="content-section" id="section-map">
+          <section class="panel">
+            <div class="panel-heading">Seksyon 4: Geograpikong Pamamahagi</div>
+            <div class="subtext">Geographical distribution batay sa mga lokasyon at siyudad.</div>
+          </section>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
