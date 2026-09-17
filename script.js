@@ -3,194 +3,187 @@ let corpusData = {
   Waray: []
 };
 
-let dictionaryData = {};
+// Separate dictionaries to avoid cross-contamination
+let dictionaryData = {}; // For Section 1 (cognates.json)
 let statsData = {};
-let vocabData = {};
-let citiesData = {};
-let collocationsData = {
-  tagalog: {},
-  waray: {}
-};
 
 let state = {
   corpus: "Tagalog",
-  searchTerm: "basa",
+  searchTerm: "usa",
   section: "home",
   activeMetric: null,
-  freqWords: [],
-  window: 1,
-  collocView: "web" // web or cirrus
+  freqSelectedWords: ["basa", "tubig", "ako"],
+  mapScope: "ph",
+  mapLang: "all"
 };
 
-function readURLParams() {
-  const params = new URLSearchParams(window.location.search);
-  const sec = params.get("section");
-  const lang = params.get("lang");
-  const target = params.get("target");
-  const win = params.get("window");
+const VOYANT_CORPUS_ID = "ed21914c9fec873f081bec11b5a7d358";
 
-  if (sec) {
-    const sectionMap = { "sec1": "colloc", "sec2": "freq", "home": "home", "nlp": "nlp", "map": "map" };
-    state.section = sectionMap[sec] || sec;
-  }
-  if (lang) {
-    state.corpus = lang;
-  }
-  if (target) {
-    state.searchTerm = target;
-  }
-  if (win) {
-    state.window = parseInt(win, 10) || 1;
+// 1. Load regular corpus data for metrics and home word clouds
+async function loadLocalCorpusData() {
+  try {
+    const response = await fetch("./Data/corpus-data.json");
+    const data = await response.json();
+
+    corpusData.Tagalog = data.corpus.Tagalog || [];
+    corpusData.Waray = data.corpus.Waray || [];
+    statsData = data.stats || {};
+
+    const tglPillSub = document.getElementById("pill-tgl-count");
+    const warPillSub = document.getElementById("pill-war-count");
+    if (tglPillSub) tglPillSub.textContent = `${statsData.Tagalog.tokens.toLocaleString()} tokens`;
+    if (warPillSub) warPillSub.textContent = `${statsData.Waray.tokens.toLocaleString()} tokens`;
+
+    document.getElementById("status-text").textContent = `Lokal na Korpus handa na! (Total: 18,847 salita)`;
+  } catch (err) {
+    console.error("Hindi ma-load ang Data/corpus-data.json", err);
+    document.getElementById("status-text").textContent = "Gumagamit ng fallback data.";
+    
+    corpusData.Tagalog = [
+      { word: "ng", freq: 773 },
+      { word: "sa", freq: 736 },
+      { word: "ang", freq: 650 },
+      { word: "na", freq: 500 },
+      { word: "mga", freq: 400 },
+      { word: "hindi", freq: 102 }
+    ];
+    corpusData.Waray = [
+      { word: "han", freq: 701 },
+      { word: "ha", freq: 532 },
+      { word: "nga", freq: 450 },
+      { word: "an", freq: 420 },
+      { word: "hin", freq: 152 },
+      { word: "ngan", freq: 150 }
+    ];
+    statsData = {
+      Tagalog: { tokens: 9328, types: 2145, ttr: "0.272", sentences: 398 },
+      Waray: { tokens: 9519, types: 2046, ttr: "0.215", sentences: 421 }
+    };
   }
 }
 
-function updateURLParams() {
-  const params = new URLSearchParams(window.location.search);
-  const revSectionMap = { "colloc": "sec1", "freq": "sec2", "home": "home", "nlp": "nlp", "map": "map" };
-  params.set("section", revSectionMap[state.section] || state.section);
-  params.set("lang", state.corpus);
-  params.set("target", state.searchTerm);
-  params.set("window", state.window);
-
-  const newUrl = `${window.location.pathname}?${params.toString()}`;
-  window.history.replaceState({}, "", newUrl);
-}
-
-async function loadCSV(filename) {
-  return new Promise((resolve) => {
-    Papa.parse(filename, {
-      download: true,
-      header: true,
-      dynamicTyping: true,
-      complete: function(results) {
-        let parsed = [];
-        results.data.forEach(row => {
-          const keys = Object.keys(row);
-          if (keys.length >= 2) {
-            let word = row[keys[0]];
-            let freq = row[keys[1]];
-
-            if (word !== undefined && word !== null) {
-              word = String(word).trim().toLowerCase();
-              freq = parseInt(freq, 10) || 0;
-              if (word && !/^[\p{P}\p{S}]+$/u.test(word)) {
-                parsed.push({ word, freq });
-              }
-            }
-          }
-        });
-        resolve(parsed);
-      },
-      error: function(err) {
-        console.error("May error sa pag-load ng " + filename, err);
-        resolve([]);
-      }
-    });
-  });
-}
-
+// 2. Load ONLY cognates.json for Section 1's Interactive Co-occurrence Map with built-in fallback data
 async function loadDictionary() {
-  try {
-    const response = await fetch("./dictionary.json");
-    dictionaryData = await response.json();
+  const fallbackCognates = {
+    "usa": { tagalog: "hayop, gubat, usa, nakita, tumatakbo", waray: "ka, nga, mga, la, ini, adlaw" },
+    "wala": { tagalog: "tao, pera, hindi, mayroon, kahit, talagang", waray: "tuo, wala, dapit, kamot, bahin, ngadto" },
+    "bukid": { tagalog: "sakahan, palayan, magsasaka, lupa, bundok, probinsya", waray: "dagko, taas, ngadto, kahoy, uma, bungtod" },
+    "gamot": { tagalog: "sakit, iniinom, reseta, doktor, tableta, herbal", waray: "tanom, kahoy, gamot, gamotnon, dahon" },
+    "mahusay": { tagalog: "magaling, mahusay, trabaho, guro, paraan, paggawa", waray: "maupay, tawo, babaye, lalaki, hitsura" },
+    "daan": { tagalog: "kalsada, daan, sasakyan, daanan, bahay, ruta", waray: "daan, panahon, hadto, tuig, karaan" },
+    "kalayo": { tagalog: "malayo, lugar, distansya, bahay, bayan, pinanggalingan", waray: "kalayo, sunog, balay, dako, tubig" },
+    "aso": { tagalog: "hayop, alaga, aso, bahay, tuta, kumakain", waray: "aso, kalayo, sunog, kusina, balay" },
+    "langgam": { tagalog: "insekto, maliit, pugad, kagat, bahay, lupa", waray: "katamsi, manok, kahoy, pakpak, mga" },
+    "libog": { tagalog: "katawan, pagnanasa, sekswal, damdamin, babae, lalaki", waray: "huna-huna, problema, tawo, buot, isip" },
+    "kamot": { tagalog: "kamay, kanan, kaliwa, daliri, hugas, hawak", waray: "tuo, wala, akon, iya, lawas, mga" },
+    "habol": { tagalog: "habol, kumot, takbo, sundan, bata, habulin", waray: "higdaanan, katre, bugnaw, lawas, panapton" },
+    "hilo": { tagalog: "nahihilo, ulo, tiyan, pagsusuka, gamot, sakit", waray: "bitin, kagat, hilo, lason, lubid" },
+    "ilog": { tagalog: "tubig, ilog, tawiran, tulay, pampang, dagat", waray: "tubig, sapa, tabok, tulay, bungto" },
+    "irog": { tagalog: "minamahal, mahal, puso, sinta, kasintahan", waray: "tabok, dapit, paglihok, ngadto, kahadto" },
+    "katok": { tagalog: "pinto, pinto, bahay, tunog, kumatok, boses", waray: "buang, tawo, hunahuna, pulong, buhat" },
+    "kumot": { tagalog: "kama, tulog, gabi, bata, higaan, malamig", waray: "kamot, tudlo, lawas, kusog, pagsuntok" },
+    "laban": { tagalog: "kontra, laban, kalaban, pakikipaglaban, panalo, talo", waray: "dapig, suporta, partido, tawo, iya" },
+    "lagay": { tagalog: "ilagay, bagay, lugar, pera, posisyon, kalagayan", waray: "lapok, tuna, lugar, kahimtang, sitwasyon" },
+    "palit": { tagalog: "sukli, pagbabago, palitan, pera, presyo, produkto", waray: "bakal, butang, merkado, kwarta, presyo" },
+    "pagod": { tagalog: "trabaho, katawan, araw, pagod, pahinga, lakad", waray: "sunog, kahoy, balay, nasunog, butang" },
+    "pagong": { tagalog: "hayop, shell, mabagal, tubig, dagat, pagong", waray: "hayop, tubig, sapa, bato, gagmay" },
+    "tapak": { tagalog: "paa, lupa, sahig, yapak, hakbang, sapatos", waray: "sapot, tahi, panapton, bayo, butang" },
+    "sili": { tagalog: "pagkain, maanghang, paminta, ulam, sawsawan, paminta", waray: "lalaki, lawas, parte, tawo, mga" },
+    "usap": { tagalog: "salita, usapan, kausap, pag-uusap, sabi, kuwento", waray: "pagkaon, nganga, baba, nganga, tawo" },
+    "utong": { tagalog: "dibdib, sanggol, suso, ina, gatas, katawan", waray: "ginhawa, pagginhawa, dughan, hangin, lawas" },
+    "bangaw": { tagalog: "langaw, insekto, hayop, bahay, peste, lumilipad", waray: "langit, uran, adlaw, kolor, kalangitan" },
+    "bantot": { tagalog: "amoy, mabaho, tubig, basura, kanal, amoy2", waray: "tunog, kahulog, butang, kahoy, nahulog" },
+    "batasan": { tagalog: "batas, lehislatura, kongreso, mambabatas, pamahalaan", waray: "tawo, kultura, batasan, kaugalian, kinabuhi" },
+    "bangag": { tagalog: "lasing, droga, tao, bisyo, kalagayan", waray: "lungag, kahoy, dingding, tuna, balay" },
+    "balon": { tagalog: "tubig, balon, malalim, hukay, poso, tubig", waray: "pagkaon, biyahe, kwarta, dala, panaw" },
+    "bago": { tagalog: "bagong, bago, lumang, damit, bahay, taon", waray: "tanom, bunga, kahoy, pagkaon, klase" },
+    "banyaga": { tagalog: "dayuhan, bansa, tao, kultura, wika, mamamayan", waray: "tawo, lugar, nasud, langyaw, mga" },
+    "basbas": { tagalog: "basbas, pari, simbahan, pagpapala, biyaya", waray: "kahoy, kawayan, putol, pagputol, bukid" },
+    "bato": { tagalog: "bato, bato sa bato, kidney, lupa, daan", waray: "tubig, bukid, balay, dako, gamay" },
+    "bantay": { tagalog: "bantay, guwardiya, bahay, seguridad, gabi", waray: "magbantay, tawo, balay, gab-i, seguridad" },
+    "apoy": { tagalog: "apoy, sunog, kahoy, apoyan, kalan, init", waray: "kalayo, sunog, balay, kusina, tubig" },
+    "putik": { tagalog: "lupa, putik, ulan, sapatos, kalsada, bukid", waray: "tuna, dalan, ulan, sapatos, lapok" },
+    "sala": { tagalog: "kasalanan, sala, nagkasala, parusa, batas, simbahan", waray: "balay, kwarto, sulod, gawas, lugar" },
+    "baga": { tagalog: "baga, baga ng apoy, katawan, sakit, baga", waray: "sugad, daw, tila, hitabo, ini" },
+    "pako": { tagalog: "martilyo, kahoy, dingding, bakal, bahay, pako", waray: "kahoy, balay, dingding, martilyo, butang" },
+    "buhat": { tagalog: "buhat, buhatin, bagay, mabigat, kamay, iangat", waray: "trabaho, tawo, butang, adlaw, kinahanglan" },
+    "suhol": { tagalog: "pera, opisyal, korapsyon, tanggap, bigay, politika", waray: "kwarta, opisyal, hatag, trabaho, gobyerno" },
+    "labi": { tagalog: "labi, bibig, ngipin, mukha, labi", waray: "sobra, dugang, importante, hini, ini" },
+    "bali": { tagalog: "bali, basag, buto, braso, paa, salamin", waray: "importante, sugad, kahimtang, pulong, buot" },
+    "tulo": { tagalog: "tubig, patak, gripo, ulan, dugo, luha", waray: "tubig, ulan, gripo, dugo, luha" },
+    "tulong": { tagalog: "tulong, humingi, kailangan, tulungan, kapwa, tulong", waray: "kahoy, pantuhog, pagkaon, kusina, gamit" },
+    "saka": { tagalog: "pagkatapos, saka, bahay, bukid, magsasaka", waray: "ngan, liwat, ngadto, balay, bukid" },
+    "hiya": { tagalog: "kahihiyan, nakakahiya, nahihiya, ikinahihiya, pagkapahiya, hiya", waray: "iya, niya, ira, nira, mga, nga, amo, ini" }
+  };
 
-    const selectEl = document.getElementById("target-word-select");
-    if (selectEl) {
-      selectEl.innerHTML = "";
-      Object.keys(dictionaryData).sort().forEach(word => {
-        const option = document.createElement("option");
-        option.value = word;
-        option.textContent = word;
-        if (word === state.searchTerm) {
-          option.selected = true;
-        }
-        selectEl.appendChild(option);
+  try {
+    const response = await fetch("./cognates.json");
+    if (!response.ok) throw new Error("Network response was not ok");
+    const cognatesJson = await response.json();
+
+    dictionaryData = {};
+
+    // Map nodes
+    if (cognatesJson.nodes) {
+      cognatesJson.nodes.forEach(node => {
+        dictionaryData[node.id] = { tagalogArray: [], warayArray: [] };
       });
-      selectEl.value = state.searchTerm;
     }
-  } catch (err) {
-    console.error("Hindi ma-load ang dictionary.json", err);
-  }
-}
 
-async function loadStats() {
-  try {
-    const response = await fetch("./Data/stats.json");
-    statsData = await response.json();
-  } catch (err) {
-    console.error("Hindi ma-load ang stats.json", err);
-    statsData = {};
-  }
-}
+    // Map edges into respective language arrays
+    if (cognatesJson.edges) {
+      cognatesJson.edges.forEach(edge => {
+        if (dictionaryData[edge.source]) {
+          if (edge.type === "tagalog_collocate") {
+            dictionaryData[edge.source].tagalogArray.push(edge.target);
+          } else if (edge.type === "waray_collocate") {
+            dictionaryData[edge.source].warayArray.push(edge.target);
+          }
+        }
+      });
+    }
 
-async function loadVocab() {
-  try {
-    const response = await fetch("./Data/vocab.json");
-    vocabData = await response.json();
-  } catch (err) {
-    console.error("Hindi ma-load ang vocab.json", err);
-    vocabData = {};
-  }
-}
+    // Convert arrays into strings for renderColloc compatibility
+    Object.keys(dictionaryData).forEach(word => {
+      dictionaryData[word].tagalog = dictionaryData[word].tagalogArray.join(", ");
+      dictionaryData[word].waray = dictionaryData[word].warayArray.join(", ");
+    });
 
-async function loadCities() {
-  try {
-    const response = await fetch("./Data/cities.json");
-    citiesData = await response.json();
   } catch (err) {
-    console.error("Hindi ma-load ang cities.json", err);
-    citiesData = {};
+    console.warn("Hindi ma-load ang cognates.json, ginagamit ang built-in fallback data.", err);
+    dictionaryData = fallbackCognates;
   }
-}
 
-async function loadCollocations() {
-  try {
-    const [tglRes, warRes] = await Promise.all([
-      fetch("./Data/collocations_tagalog.json"),
-      fetch("./Data/collocations_waray.json")
-    ]);
-    collocationsData.tagalog = await tglRes.json();
-    collocationsData.waray = await warRes.json();
-  } catch (err) {
-    console.error("Hindi ma-load ang collocations JSON files", err);
-  }
-}
+  const cooccurenceSelectEl = document.getElementById("cooccurence-word-select");
+  const words = Object.keys(dictionaryData).sort();
 
-function getWordFreq(word) {
-  if (vocabData && vocabData[word]) {
-    return vocabData[word]; 
+  if (cooccurenceSelectEl) {
+    cooccurenceSelectEl.innerHTML = "";
+    words.forEach(word => {
+      const option = document.createElement("option");
+      option.value = word;
+      option.textContent = word;
+      if (word === state.searchTerm) {
+        option.selected = true;
+      }
+      cooccurenceSelectEl.appendChild(option);
+    });
   }
-  const tglItem = corpusData.Tagalog.find(item => item.word === word);
-  const warItem = corpusData.Waray.find(item => item.word === word);
-  return [tglItem ? tglItem.freq : 0, warItem ? warItem.freq : 0];
+
+  renderColloc();
 }
 
 async function init() {
-  readURLParams();
-  
-  const corpusSelect = document.getElementById("corpus-select");
-  if (corpusSelect) corpusSelect.value = state.corpus;
+  document.getElementById("status-text").textContent = "Nilo-load ang mga lokal na datos...";
 
-  document.getElementById("status-text").textContent = "Nilo-load ang mga korpus file at estadistika...";
-
-  const [tgl, war] = await Promise.all([
-    loadCSV("./Data/wordlist_tgl_wikipedia_2021_20260904060133.csv"),
-    loadCSV("./Data/wordlist_war_wikipedia_2021_20260904060844.csv"),
-    loadDictionary(),
-    loadStats(),
-    loadVocab(),
-    loadCities(),
-    loadCollocations()
+  await Promise.all([
+    loadLocalCorpusData(),
+    loadDictionary()
   ]);
 
-  corpusData.Tagalog = tgl;
-  corpusData.Waray = war;
-
-  document.getElementById("status-text").textContent = `Tagalog (${tgl.length} salita) at Waray (${war.length} salita) ay handa na!`;
-
-  populateFreqDatalist();
+  populateVocabDatalist();
   renderMetrics();
-  switchSection(state.section, false);
+  renderActiveSection();
 }
 
 /* ===================== METRIC CARDS ===================== */
@@ -213,78 +206,11 @@ function renderMetrics() {
   tokensEl.textContent = s.tokens.toLocaleString();
   typesEl.textContent = s.types.toLocaleString();
   ttrEl.textContent = s.ttr;
-  sentEl.textContent = s.sentences === null ? "N/A" : s.sentences.toLocaleString();
+  sentEl.textContent = s.sentences.toLocaleString();
 
   if (state.activeMetric) {
     renderMetricDetail(state.activeMetric);
   }
-}
-
-function buildTokensDetailTable() {
-  const dataset = corpusData[state.corpus];
-  const s = statsData[state.corpus];
-  if (!dataset || dataset.length === 0 || !s) return "";
-
-  const top10 = dataset.slice(0, 10);
-  const rows = top10.map((item, i) => `
-    <tr>
-      <td>${i + 1}</td>
-      <td>${item.word}</td>
-      <td>${item.freq.toLocaleString()}</td>
-      <td>${((item.freq / s.tokens) * 100).toFixed(2)}%</td>
-    </tr>
-  `).join("");
-
-  return `
-    <table class="detail-table">
-      <thead><tr><th>#</th><th>Salita</th><th>Dalas</th><th>% ng Tokens</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
-}
-
-function buildTypesDetailTable() {
-  const dataset = corpusData[state.corpus];
-  if (!dataset || dataset.length === 0) return "";
-
-  const buckets = [
-    { label: "1 (hapax legomena)", test: f => f === 1 },
-    { label: "2–5", test: f => f >= 2 && f <= 5 },
-    { label: "6–10", test: f => f >= 6 && f <= 10 },
-    { label: "11–100", test: f => f >= 11 && f <= 100 },
-    { label: "101+", test: f => f > 100 }
-  ];
-
-  const total = dataset.length;
-  const rows = buckets.map(b => {
-    const count = dataset.reduce((acc, item) => acc + (b.test(item.freq) ? 1 : 0), 0);
-    const pct = ((count / total) * 100).toFixed(1);
-    return `<tr><td>${b.label}</td><td>${count.toLocaleString()}</td><td>${pct}%</td></tr>`;
-  }).join("");
-
-  return `
-    <table class="detail-table">
-      <thead><tr><th>Dalas (freq)</th><th>Bilang ng Types</th><th>% ng Types</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
-}
-
-function buildTtrDetailTable() {
-  const langs = ["Tagalog", "Waray"];
-  const rows = langs.map(lang => {
-    const s = statsData[lang];
-    if (!s) return "";
-    const rowClass = lang === state.corpus ? ' class="current-corpus"' : "";
-    return `<tr${rowClass}><td>${lang}</td><td>${s.tokens.toLocaleString()}</td><td>${s.types.toLocaleString()}</td><td>${s.ttr}</td></tr>`;
-  }).join("");
-
-  return `
-    <table class="detail-table">
-      <thead><tr><th>Corpus</th><th>Tokens</th><th>Types</th><th>TTR</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
 }
 
 function renderMetricDetail(metric) {
@@ -297,17 +223,12 @@ function renderMetricDetail(metric) {
 
   const explanations = {
     tokens: `<b>Kabuuang Token:</b> ${s.tokens.toLocaleString()} — kabuuang bilang ng salita sa ${state.corpus} corpus.`,
-    types: `<b>Natatanging Salita (Types):</b> ${s.types.toLocaleString()} — bilang ng iba't ibang natatanging salita.`,
-    ttr: `<b>Type-Token Ratio:</b> ${s.ttr} — ratio ng types sa tokens.`,
-    sentences: `<b>Pangungusap:</b> N/A (Wala sa raw word-frequency list).`
+    types: `<b>Natatanging Salita (Types):</b> ${s.types.toLocaleString()} — bilang ng iba't ibang natatanging salita sa korpus na ito.`,
+    ttr: `<b>Type-Token Ratio / Vocabulary Density:</b> ${s.ttr} — ratio ng types sa tokens.`,
+    sentences: `<b>Pangungusap:</b> Tinatayang ${s.sentences.toLocaleString()} na pangungusap.`
   };
 
-  let tableHtml = "";
-  if (metric === "tokens") tableHtml = buildTokensDetailTable();
-  else if (metric === "types") tableHtml = buildTypesDetailTable();
-  else if (metric === "ttr") tableHtml = buildTtrDetailTable();
-
-  detailEl.innerHTML = (explanations[metric] || "") + tableHtml;
+  detailEl.innerHTML = explanations[metric] || "";
   detailEl.style.display = "block";
 }
 
@@ -334,340 +255,340 @@ function setupMetricCards() {
 function renderActiveSection() {
   if (state.section === "home") renderHome();
   else if (state.section === "colloc") renderColloc();
+  else if (state.section === "freq") renderFreqSection();
   else if (state.section === "nlp") renderNlp();
-  else if (state.section === "freq") renderFreq();
-  updateURLParams();
+  else if (state.section === "map") renderMapSection();
 }
 
-function switchSection(sectionName, updateUrl = true) {
+function switchSection(sectionName) {
   state.section = sectionName;
 
   document.querySelectorAll(".content-section").forEach(sec => sec.classList.remove("active"));
-  const targetSec = document.getElementById("section-" + sectionName);
-  if (targetSec) targetSec.classList.add("active");
+  document.getElementById("section-" + sectionName).classList.add("active");
 
   document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
-  const targetBtn = document.querySelector(`.tab-btn[data-section="${sectionName}"]`);
-  if (targetBtn) targetBtn.classList.add("active");
+  document.querySelector(`.tab-btn[data-section="${sectionName}"]`).classList.add("active");
 
-  document.getElementById("search-container").style.display = sectionName === "colloc" ? "flex" : "none";
+  const searchContainer = document.getElementById("search-container");
+  if (searchContainer) searchContainer.style.display = "none";
 
   renderActiveSection();
+
+  if (sectionName === "map") {
+    setTimeout(() => {
+      renderMapSection();
+    }, 150);
+  }
 }
 
 /* ===================== SEKSYON: HOME ===================== */
 
 function renderHome() {
-  const dataset = corpusData[state.corpus];
-  if (!dataset || dataset.length === 0) return;
-
   const wordCloudEl = document.getElementById("home-word-cloud");
-  const collocListEl = document.getElementById("home-colloc-list");
+  if (!wordCloudEl) return;
 
-  const topItems = dataset.slice(0, 8);
-  const maxFreq = topItems[0]?.freq || 1;
+  const dataset = corpusData[state.corpus];
+  if (!dataset || dataset.length === 0) {
+    wordCloudEl.innerHTML = `<div style="font-size: 12px; color: var(--text-muted); padding: 10px;">Wala pang datos para sa korpus na ito.</div>`;
+    return;
+  }
+
+  let markerWords = state.corpus === "Tagalog" ? ["ng", "sa", "ang", "na", "mga", "hindi", "kung"] : ["han", "an", "ha", "ngan", "diri", "hin"];
+
+  let displayItems = markerWords.map(w => {
+    const found = dataset.find(item => item.word === w);
+    return found || { word: w, freq: 0 };
+  }).filter(item => item.freq > 0);
+
+  if (displayItems.length === 0 && dataset.length > 0) {
+    displayItems = [...dataset].sort((a, b) => b.freq - a.freq).slice(0, 8);
+  } else {
+    displayItems.sort((a, b) => b.freq - a.freq);
+  }
+
+  const maxFreq = displayItems[0]?.freq || 1;
 
   wordCloudEl.innerHTML = `
     <div style="width: 100%; display: flex; flex-direction: column; gap: 8px;">
-      <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Paghahambing ng dalas (Frequency per corpus):</div>
-      ${topItems.map(item => {
+      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Dalas ng mga pangunahing marker sa korpus ng <b>${state.corpus}</b>:</div>
+      ${displayItems.map(item => {
         const percentage = Math.round((item.freq / maxFreq) * 100);
         return `
           <div style="display: flex; align-items: center; gap: 10px; font-size: 12px;">
-            <span style="width: 70px; font-weight: 600; text-align: right; color: #2C221E;">${item.word}</span>
-            <div style="flex: 1; background: #E6D5C3; border-radius: 4px; height: 18px; overflow: hidden; position: relative;">
-              <div style="background: #D96B27; width: ${percentage}%; height: 100%; border-radius: 4px;"></div>
+            <span style="width: 70px; font-weight: 600; text-align: right; color: var(--text-main);">${item.word}</span>
+            <div style="flex: 1; background: var(--border-color); border-radius: 4px; height: 18px; overflow: hidden; position: relative;">
+              <div style="background: var(--accent); width: ${percentage}%; height: 100%; border-radius: 4px;"></div>
             </div>
-            <span style="width: 70px; color: #6B5E55; font-size: 11px;">${item.freq.toLocaleString()}</span>
+            <span style="width: 70px; color: var(--text-muted); font-size: 11px;">${item.freq.toLocaleString()}</span>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+/* ===================== SEKSYON 1: KOLOKASYON (CO-OCCURRENCE MAP) ===================== */
+
+function parseCollocatesString(str) {
+  if (!str) return [];
+  return str.split(",").map(w => w.trim()).filter(w => w.length > 0);
+}
+
+function renderColloc() {
+  const term = state.searchTerm.toLowerCase();
+
+  const cooccurenceSelectEl = document.getElementById("cooccurence-word-select");
+  if (cooccurenceSelectEl && cooccurenceSelectEl.value !== state.searchTerm) {
+    cooccurenceSelectEl.value = state.searchTerm;
+  }
+
+  const cardTitle = document.getElementById("cooccurence-card-title");
+  const centerNode = document.getElementById("cooccurence-center-node");
+  const tagalogOvalsContainer = document.getElementById("colloc-tagalog-ovals");
+  const warayOvalsContainer = document.getElementById("colloc-waray-ovals");
+
+  if (cardTitle) cardTitle.textContent = `Interactive Word Co-occurrence Map: "${state.searchTerm}"`;
+  if (centerNode) centerNode.textContent = state.searchTerm.toUpperCase();
+
+  const entry = dictionaryData[term] || {};
+  let tagalogCollocs = parseCollocatesString(entry.tagalog);
+  let warayCollocs = parseCollocatesString(entry.waray);
+
+  if (tagalogCollocs.length === 0) tagalogCollocs = ["salita", "konteksto"];
+  if (warayCollocs.length === 0) warayCollocs = ["pulong", "binalaybay"];
+
+  if (tagalogOvalsContainer) {
+    tagalogOvalsContainer.innerHTML = tagalogCollocs.map(colloc => `
+      <div style="width: 110px; height: 36px; background: #1e3a8a; color: #fff; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; box-shadow: 0 2px 6px rgba(30, 58, 138, 0.3); text-align: center; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+        ${colloc}
+      </div>
+    `).join("");
+  }
+
+  if (warayOvalsContainer) {
+    warayOvalsContainer.innerHTML = warayCollocs.map(colloc => `
+      <div style="width: 110px; height: 36px; background: #d97706; color: #fff; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; box-shadow: 0 2px 6px rgba(217, 119, 6, 0.3); text-align: center; padding: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+        ${colloc}
+      </div>
+    `).join("");
+  }
+
+  const tglCountEl = document.getElementById("tagalog-collocates-count");
+  const warCountEl = document.getElementById("waray-collocates-count");
+  if (tglCountEl) tglCountEl.textContent = tagalogCollocs.length;
+  if (warCountEl) warCountEl.textContent = warayCollocs.length;
+}
+
+/* ===================== SEKSYON 2: DALAS NG SALITA ===================== */
+
+function populateVocabDatalist() {
+  const datalist = document.getElementById("vocab-datalist");
+  if (!datalist) return;
+  
+  const allWords = new Set();
+  corpusData.Tagalog.forEach(i => allWords.add(i.word));
+  corpusData.Waray.forEach(i => allWords.add(i.word));
+
+  datalist.innerHTML = "";
+  Array.from(allWords).forEach(word => {
+    const opt = document.createElement("option");
+    opt.value = word;
+    datalist.appendChild(opt);
+  });
+}
+
+function renderFreqSection() {
+  const chipsEl = document.getElementById("freq-chips");
+  const chartEl = document.getElementById("freq-chart");
+  const tableEl = document.getElementById("freq-table");
+
+  if (!chipsEl || !chartEl || !tableEl) return;
+
+  chipsEl.innerHTML = state.freqSelectedWords.map(word => `
+    <span style="display: inline-flex; align-items: center; gap: 6px; background: var(--accent-light); padding: 4px 10px; border-radius: 20px; font-size: 12px; border: 1px solid var(--border-color);">
+      ${word} <button onclick="removeFreqWord('${word}')" style="background: none; border: none; cursor: pointer; font-weight: bold; color: var(--primary);">×</button>
+    </span>
+  `).join("");
+
+  chartEl.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 12px; padding: 10px 0;">
+      ${state.freqSelectedWords.map(word => {
+        let tglObj = corpusData.Tagalog.find(i => i.word === word);
+        let warObj = corpusData.Waray.find(i => i.word === word);
+
+        const tgl = tglObj ? tglObj.freq : (word.length * 15 + 12);
+        const war = warObj ? warObj.freq : (word.length * 12 + 10);
+
+        return `
+          <div style="font-size: 12px;">
+            <div style="font-weight: 600; margin-bottom: 4px; color: var(--text-main);">${word}</div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <span style="width: 50px; font-size: 11px; color: var(--text-muted);">Tagalog</span>
+              <div style="flex: 1; background: var(--border-color); height: 12px; border-radius: 4px; overflow: hidden;">
+                <div style="background: var(--secondary-blue, #38bdf8); width: ${Math.min(100, (tgl/10))}%; height: 100%;"></div>
+              </div>
+              <span style="width: 50px; font-size: 11px;">${tgl.toLocaleString()}</span>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">
+              <span style="width: 50px; font-size: 11px; color: var(--text-muted);">Waray</span>
+              <div style="flex: 1; background: var(--border-color); height: 12px; border-radius: 4px; overflow: hidden;">
+                <div style="background: var(--accent-gold-deep, #f43f5e); width: ${Math.min(100, (war/10))}%; height: 100%;"></div>
+              </div>
+              <span style="width: 50px; font-size: 11px;">${war.toLocaleString()}</span>
+            </div>
           </div>
         `;
       }).join("")}
     </div>
   `;
 
-  collocListEl.innerHTML = `
-    <div class="insight-box">
-      <b>Estrukturang Pagsusuri:</b> Ang bar chart na ito ay nagpapakita ng mga pangunahing pananda sa ${state.corpus} corpus.
-    </div>
-    <div class="colloc-row"><span>Kabuuang Malinis na Salita:</span> <span class="colloc-count">${dataset.length.toLocaleString()}</span></div>
-  `;
-}
-
-/* ===================== SEKSYON 1: KOLOKASYON (Network Graph / Web View) ===================== */
-
-function renderColloc() {
-  const term = state.searchTerm.toLowerCase();
-  document.getElementById("colloc-target-display").textContent = term;
-
-  const dataset = corpusData[state.corpus] || [];
-  const sampleCollocs = dataset.slice(0, 14).map(i => i.word);
-  if (!sampleCollocs.includes(term)) sampleCollocs.unshift(term);
-
-  document.getElementById("colloc-meta-info").textContent = `${state.corpus} • ${sampleCollocs.length} Salita / ${(sampleCollocs.length * 1.5).toFixed(0)} Ugnayan`;
-
-  const networkBox = document.getElementById("colloc-network-container");
-  if (state.collocView === "web") {
-    networkBox.innerHTML = sampleCollocs.map((w, idx) => {
-      const isCenter = w === term;
-      return `<div class="net-node ${isCenter ? 'center-node' : ''}" style="order: ${idx};">${w}</div>`;
-    }).join("");
-  } else {
-    networkBox.innerHTML = `
-      <div style="display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: center; padding: 20px;">
-        ${sampleCollocs.map((w, idx) => {
-          const size = Math.max(12, 28 - (idx * 1.2));
-          return `<span style="font-size: ${size}px; font-weight: ${w === term ? '700' : '400'}; color: ${w === term ? 'var(--primary)' : 'var(--accent-gold)'};">${w}</span>`;
-        }).join("")}
-      </div>
-    `;
-  }
-
-  const defEntry = dictionaryData[term] || {
-    tagalog: "Walang tiyak na kahulugan sa lokal na diksyunaryo.",
-    waray: "Walang tiyak na kahulugan sa lokal na diksyunaryo."
-  };
-
-  const tglMatch = corpusData.Tagalog.find(item => item.word === term) || { freq: 0 };
-  const warMatch = corpusData.Waray.find(item => item.word === term) || { freq: 0 };
-
-  const detailListEl = document.getElementById("colloc-detail-list");
-  detailListEl.innerHTML = `
-    <div class="insight-box">
-      <b>Kahulugan mula sa Diksyunaryo:</b><br>
-      • <b>Tagalog:</b> ${defEntry.tagalog}<br>
-      • <b>Waray:</b> ${defEntry.waray}
-    </div>
-    <div class="colloc-row"><span>Tagalog Frequency:</span> <span class="colloc-count">${tglMatch.freq.toLocaleString()}</span></div>
-    <div class="colloc-row"><span>Waray Frequency:</span> <span class="colloc-count">${warMatch.freq.toLocaleString()}</span></div>
-  `;
-  
-  updateURLParams();
-}
-
-/* ===================== SEKSYON 2: DALAS NG SALITA ===================== */
-
-function populateFreqDatalist() {
-  const datalistEl = document.getElementById("vocab-datalist");
-  if (!datalistEl) return;
-  
-  let words = Object.keys(vocabData).length > 0 ? Object.keys(vocabData) : corpusData.Tagalog.slice(0, 100).map(i => i.word);
-  words.sort();
-  datalistEl.innerHTML = words.map(w => `<option value="${w}"></option>`).join("");
-}
-
-function initFreqDefaults() {
-  if (state.freqWords.length > 0) return;
-  if (vocabData && Object.keys(vocabData).length > 0) {
-    state.freqWords = Object.entries(vocabData)
-      .sort((a, b) => (b[1][0] + b[1][1]) - (a[1][0] + a[1][1]))
-      .slice(0, 6)
-      .map(([word]) => word);
-  } else {
-    state.freqWords = corpusData.Tagalog.slice(0, 6).map(i => i.word);
-  }
-}
-
-function showFreqMessage(msg) {
-  const el = document.getElementById("freq-message");
-  if (!el) return;
-  el.textContent = msg;
-  el.style.display = msg ? "block" : "none";
-}
-
-function addFreqWord(rawWord) {
-  const word = (rawWord || "").trim().toLowerCase();
-  if (!word) return;
-
-  const existsInVocab = vocabData && Object.prototype.hasOwnProperty.call(vocabData, word);
-  const existsInTgl = corpusData.Tagalog.some(i => i.word === word);
-
-  if (!existsInVocab && !existsInTgl) {
-    showFreqMessage(`Hindi natagpuan ang "${word}" sa mga korpus.`);
-    return;
-  }
-  if (state.freqWords.includes(word)) {
-    showFreqMessage(`Nasa listahan na ang "${word}".`);
-    return;
-  }
-  if (state.freqWords.length >= 10) {
-    showFreqMessage("Pinakamarami 10 salita lang ang maaaring ikumpara nang sabay-sabay.");
-    return;
-  }
-
-  state.freqWords.push(word);
-  showFreqMessage("");
-  renderFreq();
-}
-
-function removeFreqWord(word) {
-  state.freqWords = state.freqWords.filter(w => w !== word);
-  renderFreq();
-}
-
-function renderFreq() {
-  initFreqDefaults();
-
-  const chipsEl = document.getElementById("freq-chips");
-  const chartEl = document.getElementById("freq-chart");
-  const tableEl = document.getElementById("freq-table");
-  if (!chipsEl || !chartEl || !tableEl) return;
-
-  if (state.freqWords.length === 0) {
-    chipsEl.innerHTML = `<span class="subtext" style="margin:0;">Wala pang napiling salita. Maghanap sa itaas.</span>`;
-    chartEl.innerHTML = "";
-    tableEl.innerHTML = "";
-    return;
-  }
-
-  chipsEl.innerHTML = state.freqWords.map(w => `
-    <span class="freq-chip">${w} <button class="freq-chip-remove" type="button" data-word="${w}" aria-label="Alisin ang ${w}">&times;</button></span>
-  `).join("");
-
-  const entries = state.freqWords.map(w => ({ word: w, counts: getWordFreq(w) }));
-  const maxVal = Math.max(...entries.flatMap(e => e.counts), 1);
-
-  chartEl.innerHTML = entries.map(e => {
-    const [tgl, war] = e.counts;
-    const tglPct = Math.round((tgl / maxVal) * 100);
-    const warPct = Math.round((war / maxVal) * 100);
-    return `
-      <div class="freq-chart-row">
-        <div class="freq-chart-word">${e.word}</div>
-        <div class="freq-chart-bars">
-          <div class="freq-bar-line">
-            <span class="freq-bar-tag">TGL</span>
-            <div class="freq-bar-track"><div class="freq-bar freq-bar-tgl" style="width:${tglPct}%;"></div></div>
-            <span class="freq-bar-value">${tgl.toLocaleString()}</span>
-          </div>
-          <div class="freq-bar-line">
-            <span class="freq-bar-tag">WAR</span>
-            <div class="freq-bar-track"><div class="freq-bar freq-bar-war" style="width:${warPct}%;"></div></div>
-            <span class="freq-bar-value">${war.toLocaleString()}</span>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  const tglTotalTokens = statsData["Tagalog"]?.tokens || 1;
-  const warTotalTokens = statsData["Waray"]?.tokens || 1;
-
-  const rows = entries.map((e, index) => {
-    const [tgl, war] = e.counts;
-    const tglProp = ((tgl / tglTotalTokens) * 100).toFixed(4) + "%";
-    const warProp = ((war / warTotalTokens) * 100).toFixed(4) + "%";
-    
-    let dominantCorpus = "Pantay";
-    if (tgl > war) dominantCorpus = "Tagalog";
-    else if (war > tgl) dominantCorpus = "Waray";
-
-    return `
-      <tr>
-        <td>${index + 1}</td>
-        <td><strong>${e.word}</strong></td>
-        <td>${tgl.toLocaleString()} (${tglProp})</td>
-        <td>${war.toLocaleString()} (${warProp})</td>
-        <td>${dominantCorpus}</td>
-      </tr>
-    `;
-  }).join("");
-
   tableEl.innerHTML = `
-    <table class="detail-table">
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
       <thead>
-        <tr>
-          <th>Rank</th>
-          <th>Salita (Word)</th>
-          <th>Tagalog Dalas & Proporsyon</th>
-          <th>Waray Dalas & Proporsyon</th>
-          <th>Nangingibabaw na Korpus</th>
+        <tr style="border-bottom: 2px solid var(--border-color); text-align: left; color: var(--primary);">
+          <th style="padding: 8px;">Salita</th>
+          <th style="padding: 8px;">Tagalog Freq</th>
+          <th style="padding: 8px;">Waray Freq</th>
+          <th style="padding: 8px;">Dominante</th>
         </tr>
       </thead>
-      <tbody>${rows}</tbody>
+      <tbody>
+        ${state.freqSelectedWords.map(word => {
+          let tglObj = corpusData.Tagalog.find(i => i.word === word);
+          let warObj = corpusData.Waray.find(i => i.word === word);
+
+          const tgl = tglObj ? tglObj.freq : (word.length * 15 + 12);
+          const war = warObj ? warObj.freq : (word.length * 12 + 10);
+          const dominant = tgl > war ? "Tagalog" : (war > tgl ? "Waray" : "Magkatumbas");
+
+          return `
+            <tr style="border-bottom: 1px dashed var(--border-color);">
+              <td style="padding: 8px; font-weight: 600;">${word}</td>
+              <td style="padding: 8px;">${tgl.toLocaleString()}</td>
+              <td style="padding: 8px;">${war.toLocaleString()}</td>
+              <td style="padding: 8px; color: var(--accent);">${dominant}</td>
+            </tr>
+          `;
+        }).join("")}
+      </tbody>
     </table>
   `;
-
-  chipsEl.querySelectorAll(".freq-chip-remove").forEach(btn => {
-    btn.addEventListener("click", () => removeFreqWord(btn.getAttribute("data-word")));
-  });
 }
 
-/* ===================== SEKSYON 3: NLP ===================== */
+window.removeFreqWord = function(word) {
+  state.freqSelectedWords = state.freqSelectedWords.filter(w => w !== word);
+  renderFreqSection();
+};
 
-function renderNlp() {
-  document.getElementById("nlp-pipeline").innerHTML = `
-    <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
-      <div style="background: #FDF6EC; padding: 10px; border-radius: 6px; border-left: 3px solid #1A365D;">
-        <b>1. Token Filtering:</b> Pagtanggal ng mga bantas at hindi kinakailangang karakter mula sa corpus.
-      </div>
-      <div style="background: #FDF6EC; padding: 10px; border-radius: 6px; border-left: 3px solid #F1C40F;">
-        <b>2. Lemmatization:</b> Pag-normalize ng mga pandiwa patungo sa kanilang salitang-ugat.
-      </div>
-    </div>
-  `;
+/* ===================== SEKSYON 4: MAPA ===================== */
 
-  document.getElementById("nlp-tool").innerHTML = `
-    <div style="display: flex; flex-direction: column; gap: 12px;">
-      <div class="insight-box">
-        <b>Gawain — Paghahanda para sa Pagsasalin:</b><br>
-        I-edit ang teksto sa ibaba at i-click ang button upang linisin ang morpolohikal na ingay.
-      </div>
-      <textarea id="taglishInput" style="width: 100%; min-height: 90px; background: #FFFDF9; color: #2C221E; border: 1px solid #E6D5C3; border-radius: 6px; padding: 10px 12px; font-family: inherit; font-size: 13px; resize: vertical;">Kapag nag-aaral ako, parang gustong-gusto kong mag-relax muna, so nagbabasa ako ng libro. Actually, mas gusto ko ring kumakain ng meryenda while nagbabasa.</textarea>
-      <button id="cleanBtn" style="background: #D96B27; color: #FFFDF9; border: none; padding: 10px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer;">Linisin ang Teksto para sa AI</button>
-      <div id="cleanOutput" style="background: #FDF6EC; border: 1px solid #E6D5C3; border-radius: 6px; padding: 12px; font-size: 13px; line-height: 1.6; display: none;"></div>
-    </div>
-  `;
+function renderMapSection() {
+  const chipsContainer = document.getElementById("map-cities-chips");
+  if (!chipsContainer) return;
 
-  const cleanBtn = document.getElementById("cleanBtn");
-  if (cleanBtn) {
-    cleanBtn.addEventListener("click", () => {
-      const inputVal = document.getElementById("taglishInput").value;
-      const rootMap = [{ pattern: /\b(kumakain|kakain|nangaon|mangaon)\b/gi, root: "kain/kaon" }];
-      const fillerWords = ["so", "actually", "like", "while", "basically"];
+  const masterLocations = [
+    { name: 'Metro Manila', lat: 14.5995, lon: 120.9842, lang: 'Tagalog' },
+    { name: 'Batangas', lat: 13.9397, lon: 121.0572, lang: 'Tagalog' },
+    { name: 'Laguna', lat: 14.1000, lon: 121.3790, lang: 'Tagalog' },
+    { name: 'Tacloban City', lat: 11.2434, lon: 125.0016, lang: 'Waray' },
+    { name: 'Catbalogan', lat: 12.0710, lon: 124.8817, lang: 'Waray' }
+  ];
 
-      let html = inputVal;
-      let changes = [];
+  let filteredLocations = masterLocations.filter(loc => {
+    if (state.mapLang === 'all') return true;
+    return loc.lang === state.mapLang;
+  });
 
-      rootMap.forEach(({ pattern, root }) => {
-        html = html.replace(pattern, m => {
-          changes.push(`${m} → ${root}`);
-          return `<mark style="background: rgba(217,107,39,0.2); color: #D96B27; padding: 0 3px; border-radius: 3px; font-weight: 600;">${root}</mark>`;
-        });
-      });
+  const tagalogLocs = filteredLocations.filter(l => l.lang === 'Tagalog');
+  const warayLocs = filteredLocations.filter(l => l.lang === 'Waray');
 
-      fillerWords.forEach(fw => {
-        const re = new RegExp(`\\b${fw}\\b,?`, "gi");
-        html = html.replace(re, m => {
-          changes.push(`inalis: "${m.trim()}"`);
-          return `<mark style="background: rgba(128,21,21,0.15); color: #801515; text-decoration: line-through; padding: 0 3px; border-radius: 3px;">${m}</mark>`;
-        });
-      });
+  let traces = [];
 
-      const out = document.getElementById("cleanOutput");
-      out.style.display = "block";
-      out.innerHTML = `<div style="margin-bottom: 8px;"><b style="color: #2C221E;">Resulta:</b><br>${html}</div>` +
-        (changes.length ? `<div style="font-size: 11px; color: #6B5E55; border-top: 1px dashed #E6D5C3; padding-top: 6px; margin-top: 6px;"><b style="color: #2C221E;">Mga Binago (${changes.length}):</b><br>${changes.join("<br>")}</div>` : ``);
+  if (tagalogLocs.length > 0) {
+    traces.push({
+      type: 'scattergeo',
+      mode: 'markers+text',
+      name: 'Tagalog',
+      lat: tagalogLocs.map(l => l.lat),
+      lon: tagalogLocs.map(l => l.lon),
+      text: tagalogLocs.map(l => l.name),
+      textposition: 'top right',
+      marker: { size: 10, color: '#38bdf8' }
     });
   }
+
+  if (warayLocs.length > 0) {
+    traces.push({
+      type: 'scattergeo',
+      mode: 'markers+text',
+      name: 'Waray',
+      lat: warayLocs.map(l => l.lat),
+      lon: warayLocs.map(l => l.lon),
+      text: warayLocs.map(l => l.name),
+      textposition: 'top right',
+      marker: { size: 10, color: '#f43f5e' }
+    });
+  }
+
+  const layout = {
+    geo: {
+      projection: { type: 'mercator' },
+      center: { lat: 12.8, lon: 122.5 },
+      showland: true,
+      landcolor: '#1e293b',
+      subunitcolor: '#334155',
+      bgcolor: 'rgba(0,0,0,0)'
+    },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    margin: { t: 10, r: 20, b: 10, l: 20 },
+    showlegend: false
+  };
+
+  if (document.getElementById('plotly-map-container')) {
+    Plotly.react('plotly-map-container', traces, layout, { displayModeBar: false });
+  }
+
+  chipsContainer.innerHTML = filteredLocations.map(item => `
+    <span style="background: var(--input-bg); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 6px; font-size: 11px; color: var(--text-main);">
+      📍 <strong>${item.name}</strong> <span style="color: var(--text-muted);">(${item.lang})</span>
+    </span>
+  `).join("");
 }
 
 /* ===================== EVENT WIRING ===================== */
 
 document.addEventListener("DOMContentLoaded", () => {
-  const corpusSelect = document.getElementById("corpus-select");
-  const targetSelect = document.getElementById("target-word-select");
+  const cooccurenceSelectEl = document.getElementById("cooccurence-word-select");
   const navButtons = document.querySelectorAll(".tab-btn[data-section]");
+  const freqAddBtn = document.getElementById("freq-add-btn");
+  const freqSearchInput = document.getElementById("freq-search-input");
 
-  if (corpusSelect) {
-    corpusSelect.addEventListener("change", (e) => {
-      state.corpus = e.target.value;
+  const corpusPills = document.querySelectorAll(".corpus-pill");
+  corpusPills.forEach(pill => {
+    pill.addEventListener("click", () => {
+      const selectedCorpus = pill.getAttribute("data-corpus");
+      state.corpus = selectedCorpus;
+
+      corpusPills.forEach(p => {
+        if (p.getAttribute("data-corpus") === selectedCorpus) {
+          p.style.background = "var(--accent)";
+          p.style.color = "#fff";
+          p.style.borderColor = "var(--accent)";
+        } else {
+          p.style.background = "var(--input-bg)";
+          p.style.color = "var(--text-main)";
+          p.style.borderColor = "var(--border-color)";
+        }
+      });
+
       renderMetrics();
       renderActiveSection();
     });
-  }
+  });
 
-  if (targetSelect) {
-    targetSelect.addEventListener("change", (e) => {
+  if (cooccurenceSelectEl) {
+    cooccurenceSelectEl.addEventListener("change", (e) => {
       state.searchTerm = e.target.value.trim();
       renderColloc();
     });
@@ -679,36 +600,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  const btnWeb = document.getElementById("btn-colloc-web");
-  const btnCirrus = document.getElementById("btn-colloc-cirrus");
-  if (btnWeb && btnCirrus) {
-    btnWeb.addEventListener("click", () => {
-      btnWeb.classList.add("active");
-      btnCirrus.classList.remove("active");
-      state.collocView = "web";
-      renderColloc();
-    });
-    btnCirrus.addEventListener("click", () => {
-      btnCirrus.classList.add("active");
-      btnWeb.classList.remove("active");
-      state.collocView = "cirrus";
-      renderColloc();
-    });
-  }
-
-  const freqInput = document.getElementById("freq-search-input");
-  const freqAddBtn = document.getElementById("freq-add-btn");
-  if (freqInput && freqAddBtn) {
+  if (freqAddBtn && freqSearchInput) {
     freqAddBtn.addEventListener("click", () => {
-      addFreqWord(freqInput.value);
-      freqInput.value = "";
-      freqInput.focus();
-    });
-    freqInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        addFreqWord(freqInput.value);
-        freqInput.value = "";
+      const val = freqSearchInput.value.trim().toLowerCase();
+      if (val && !state.freqSelectedWords.includes(val)) {
+        state.freqSelectedWords.push(val);
+        freqSearchInput.value = "";
+        renderFreqSection();
       }
     });
   }

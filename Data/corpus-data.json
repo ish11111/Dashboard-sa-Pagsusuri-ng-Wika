@@ -1,0 +1,28 @@
+{
+  "stats": {
+    "Tagalog": { "tokens": 9328, "types": 2145, "ttr": "0.272", "sentences": 398 },
+    "Waray": { "tokens": 9519, "types": 2046, "ttr": "0.215", "sentences": 421 }
+  },
+  "corpus": {
+    "Tagalog": [
+      { "word": "nga", "freq": 882 },
+      { "word": "ng", "freq": 773 },
+      { "word": "sa", "freq": 736 },
+      { "word": "ang", "freq": 650 },
+      { "word": "mga", "freq": 566 },
+      { "word": "hindi", "freq": 102 },
+      { "word": "lansangan", "freq": 73 },
+      { "word": "kung", "freq": 73 },
+      { "word": "lamang", "freq": 64 }
+    ],
+    "Waray": [
+      { "word": "han", "freq": 701 },
+      { "word": "ha", "freq": 532 },
+      { "word": "nga", "freq": 450 },
+      { "word": "an", "freq": 420 },
+      { "word": "hin", "freq": 152 },
+      { "word": "ngan", "freq": 150 },
+      { "word": "diri", "freq": 98 }
+    ]
+  }
+}

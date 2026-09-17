@@ -5,9 +5,9 @@
   --bg-card: #FFFDF8;
   --text-main: #2C221E;
   --text-muted: #6B5E55;
-  --primary: #A31F22;
+  --primary: #A31F22;        /* Waray red */
   --primary-dark: #7A1518;
-  --secondary-blue: #1A3A63;
+  --secondary-blue: #1A3A63; /* banner blue */
   --secondary-blue-light: #2F5C8F;
   --accent: #D96B27;
   --accent-gold: #F1C40F;
@@ -21,6 +21,7 @@
   --shadow-sm: 0 1px 3px rgba(44, 34, 30, 0.06);
   --shadow-md: 0 4px 14px rgba(122, 21, 24, 0.12);
   --transition: all 0.2s ease;
+  --border-strip-w: 26px;
 }
 
 * {
@@ -143,6 +144,7 @@ body {
   color: var(--text-muted);
 }
 
+/* Tabs / Nav Styling */
 .tabs-group {
   display: flex;
   flex-direction: column;
@@ -244,6 +246,7 @@ body {
   margin-bottom: 12px;
 }
 
+/* ===== NEW: Section switching ===== */
 .content-section {
   display: none;
   flex-direction: column;
@@ -254,6 +257,7 @@ body {
   display: flex;
 }
 
+/* ===== NEW: Metric cards ===== */
 .metric-panel {
   padding: 18px 24px;
 }
@@ -309,254 +313,31 @@ body {
   color: var(--primary);
 }
 
-.detail-table {
+/* ===== NEW: Interactive Map Layout & Centering ===== */
+.map-card-wrapper {
+  margin-top: 16px;
+  background: #0b1329;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.map-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-align: center;
+  color: #fff;
+}
+
+#plotly-map-container {
   width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-  font-size: 12px;
-}
-
-.detail-table th {
-  text-align: left;
-  padding: 6px 8px;
-  background: rgba(163, 31, 34, 0.08);
-  color: var(--primary);
-  font-weight: 700;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.detail-table td {
-  padding: 6px 8px;
-  border-bottom: 1px dashed var(--border-color);
-  color: var(--text-main);
-}
-
-.detail-table tr:last-child td {
-  border-bottom: none;
-}
-
-/* Network Graph Styles for Section 1 */
-.freq-view-controls {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  background: var(--accent-light);
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-color);
-}
-
-.chart-type-toggle {
-  display: flex;
-  gap: 6px;
-}
-
-.toggle-btn {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-muted);
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.toggle-btn.active {
-  background: var(--primary);
-  color: #FFFDF9;
-  border-color: var(--primary);
-}
-
-.network-graph-box {
-  background: #1E293B;
-  border-radius: var(--radius-md);
-  padding: 24px;
-  min-height: 380px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  justify-content: center;
-  align-items: center;
-  position: relative;
-  overflow: hidden;
-  box-shadow: inset 0 2px 8px rgba(0,0,0,0.3);
-}
-
-.net-node {
-  background: var(--accent-gold);
-  color: #1E293B;
-  padding: 8px 14px;
-  border-radius: 999px;
-  font-weight: 700;
-  font-size: 12px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-  transition: var(--transition);
-  cursor: pointer;
-}
-
-.net-node.center-node {
-  background: var(--primary);
-  color: #FFFDF9;
-  font-size: 14px;
-  padding: 10px 18px;
-  box-shadow: 0 0 15px rgba(163,31,34,0.6);
-}
-
-.net-node:hover {
-  transform: scale(1.08);
-}
-
-.freq-controls {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-#freq-search-input {
-  flex: 1;
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-color);
-  background: var(--input-bg);
-  font-size: 13px;
-  font-family: var(--font-ui);
-  color: var(--text-main);
-  outline: none;
-  transition: var(--transition);
-}
-
-#freq-search-input:focus {
-  border-color: var(--accent);
-  background: #FFFFFF;
-  box-shadow: 0 0 0 3px rgba(217, 107, 39, 0.15);
-}
-
-#freq-add-btn {
-  background: var(--accent);
-  color: #FFFDF9;
-  border: none;
-  padding: 10px 18px;
-  border-radius: var(--radius-sm);
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: var(--transition);
-}
-
-#freq-add-btn:hover {
-  background: var(--accent-gold-deep);
-}
-
-.freq-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-height: 20px;
-}
-
-.freq-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--accent-light);
-  border: 1px solid var(--border-color);
-  color: var(--primary);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 6px 6px 12px;
-  border-radius: 999px;
-}
-
-.freq-chip-remove {
-  background: none;
-  border: none;
-  color: var(--primary);
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 2px 4px;
-  font-weight: 700;
-}
-
-.freq-chart {
-  display: flex;
-  flex-direction: column;
-  margin-top: 8px;
-}
-
-.freq-chart-row {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  padding: 10px 0;
-  border-bottom: 1px dashed var(--border-color);
-}
-
-.freq-chart-row:last-child {
-  border-bottom: none;
-}
-
-.freq-chart-word {
-  width: 90px;
-  flex-shrink: 0;
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--primary);
-  padding-top: 2px;
-  word-break: break-word;
-}
-
-.freq-chart-bars {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.freq-bar-line {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-}
-
-.freq-bar-tag {
-  width: 34px;
-  flex-shrink: 0;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.freq-bar-track {
-  flex: 1;
-  background: var(--border-color);
-  border-radius: 4px;
-  height: 16px;
-  overflow: hidden;
-}
-
-.freq-bar {
-  height: 100%;
-  border-radius: 4px;
-}
-
-.freq-bar-tgl {
-  background: var(--secondary-blue);
-}
-
-.freq-bar-war {
-  background: var(--accent-gold);
-}
-
-.freq-bar-value {
-  width: 70px;
-  flex-shrink: 0;
-  color: var(--text-muted);
-  font-size: 11px;
+  max-width: 680px;
+  height: 460px;
+  border-radius: 6px;
 }
 
 @media (max-width: 900px) {
@@ -573,5 +354,8 @@ body {
   }
   .metric-cards {
     grid-template-columns: repeat(2, 1fr);
+  }
+  #plotly-map-container {
+    height: 380px;
   }
 }
